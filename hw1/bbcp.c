@@ -11,6 +11,9 @@ Problem assignment
 
 Write a simple program to copy a file following the
 specification in the accompanying manual page.
+
+Author: Spencer Salyer (b3rts)
+
 */
 
 #include <sys/stat.h>
@@ -48,6 +51,7 @@ BOOL is_dir(char* path) {
 
 long get_max_path_length() {
     long max_path = pathconf("/", _PC_PATH_MAX);
+    printf("pathconf: %ld  | default: %d", max_path, MAXPATHLEN);
     return max_path == -1 ? MAXPATHLEN : max_path;
 }
 
@@ -63,7 +67,6 @@ BOOL copy_file_to_file(char* path_source, char* path_dest) {
     // Check we can open path_dest for writing
     int fd_to;
     const int flags = O_WRONLY | O_CREAT;
-    // TODO: Copy with same permissions as source file ?
     const int perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
     if( (fd_to = open(path_dest, flags, perms)) < 0) {
         fprintf(stderr, "Unable to open [ %s ] for writing: %s\n",
@@ -116,44 +119,24 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    if (file_exists(path_dest)){
-        fprintf(stderr, "[ %s ] EXISTS...\n", path_dest);
+    if (is_dir(path_dest)) {
+        // append base name of FROM onto the directory path of TO
+        const long maxpathlen = get_max_path_length();
+        char path_dest_new[maxpathlen];
+        char* filename = strrchr(path_source, '/');
+        filename = filename ? filename + 1 : path_source;
+        snprintf(path_dest_new, sizeof(path_dest_new), "%s/%s", path_dest, filename);
+        path_dest = path_dest_new;
+    }
 
-        if (is_dir(path_dest)) {
-            fprintf(stderr, "[ %s ] is a directory.\n", path_dest);
-            // append base name of FROM onto the directory path of TO
-            const long maxpathlen = get_max_path_length();
-            char path_dest_new[maxpathlen];
-            char* filename = strrchr(path_source, '/');
-            filename = filename ? filename + 1 : path_source;
-            snprintf(path_dest_new, sizeof(path_dest_new), "%s/%s", path_dest, filename);
+    if (file_exists(path_dest)) {
+        fprintf(stderr, "Unable to copy [ %s ] to [ %s ]! (already exists)\n",
+                path_source, path_dest);
+        exit(EXIT_FAILURE);
+    }
 
-            if (!copy_file_to_file(path_source, path_dest_new)) {
-                exit(EXIT_FAILURE);
-            }
-        } else {
-            fprintf(stderr, "[ %s ] is a regular file.\n", path_dest);
-
-            fprintf(stderr, "Do you want to overwrite [ %s ]?\n", path_dest);
-            fprintf(stderr, ">  TODO: accept input with fgets or whatnot.\n");
-            BOOL overwrite = TRUE;
-
-            if (overwrite) {
-                fprintf(stderr, "Overwriting [ %s ] ...\n", path_dest);
-                if (!copy_file_to_file(path_source, path_dest)) {
-                    exit(EXIT_FAILURE);
-                }
-            } else {
-                fprintf(stderr, "Unable to copy [ %s ] to [ %s ]!\n",
-                        path_source, path_dest);
-                exit(EXIT_FAILURE);
-            }
-        }
-    } else {
-        fprintf(stderr, "[ %s ] does not exist.\n", path_dest);
-        if (!copy_file_to_file(path_source, path_dest)) {
-            exit(EXIT_FAILURE);
-        }
+    if ( ! copy_file_to_file(path_source, path_dest)) {
+        exit(EXIT_FAILURE);
     }
 
     return(EXIT_SUCCESS);
